@@ -11,6 +11,16 @@ OPENAI_KEY=
 HELIUS_API_KEY=x
 ```
 
+## Agent workflow
+
+```mermaid
+graph LR
+  A[All asset] --> B[Solana]
+  A --> C[Stable coin]
+  B --> D[Find all Solana opportunity]
+  C --> E[Find all stable coin opportunity]
+```
+
 ## Local Development
 
 ### Run with Peotry

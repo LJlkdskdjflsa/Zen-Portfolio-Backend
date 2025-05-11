@@ -20,7 +20,10 @@ dependencies = [
     "tenacity (>=9.0.0,<10.0.0)",
     "apscheduler (>=3.10.1,<4.0.0)",
     "redis (>=5.2.1,<6.0.0)",
-    "python-redis-lock (>=4.0.0,<5.0.0)"
+    "python-redis-lock (>=4.0.0,<5.0.0)",
+    "langgraph (>=0.4.3,<0.5.0)",
+    "langchain-community (>=0.3.23,<0.4.0)",
+    "langchain[openai] (>=0.3.25,<0.4.0)"
 ]
 
 

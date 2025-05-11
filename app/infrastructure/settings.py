@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
     REDIS_PASSWORD: str | None = None
+
+    # OpenAI
+    OPENAI_API_KEY: str = get_secret_manager_or_none("openai_api_key")
     
     model_config = {
         "env_file": ".env" + "." + os.environ.get("ACTIVE_PROFILE", "local"),

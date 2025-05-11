@@ -1,5 +1,6 @@
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
+import logging
 
 from app.models.YieldPool import YieldPool
 
@@ -27,18 +28,25 @@ class YieldPoolRepository:
         Returns:
             Created YieldPool instance
         """
-        # rewardTokens and underlyingTokens are already in the correct format for the database
-        # No conversion needed for JSON fields as SQLAlchemy with JSON column type handles this
-            
+        # Filter out keys that are not part of the YieldPool model
+        valid_keys = {
+            'chain', 'project', 'symbol', 'tvlUsd', 'apyBase', 'apyReward', 'apy',
+            'apyPct1D', 'apyPct7D', 'apyPct30D', 'stablecoin', 'rewardTokens', 'pool',
+            'underlyingTokens', 'ilRisk', 'exposure', 'url', 'volumeUsd1d', 'volumeUsd7d'
+        }
+        
+        # Remove any extra keys not in the model
+        filtered_pool_data = {k: v for k, v in pool_data.items() if k in valid_keys}
+        
         # Extract prediction data if available
         if 'predictions' in pool_data and pool_data['predictions'] is not None:
-            predictions = pool_data.pop('predictions')
-            pool_data['predictedClass'] = predictions.get('predictedClass')
-            pool_data['predictedProb'] = predictions.get('predictedProbability')
-            pool_data['binnedConfidence'] = predictions.get('binnedConfidence')
+            predictions = pool_data['predictions']
+            filtered_pool_data['predictedClass'] = predictions.get('predictedClass')
+            filtered_pool_data['predictedProb'] = predictions.get('predictedProbability')
+            filtered_pool_data['binnedConfidence'] = predictions.get('binnedConfidence')
         
         # Create new yield pool record
-        yield_pool = YieldPool(**pool_data)
+        yield_pool = YieldPool(**filtered_pool_data)
         self.db.add(yield_pool)
         self.db.flush()  # Flush to get the ID without committing
         
@@ -49,18 +57,22 @@ class YieldPoolRepository:
         Create multiple yield pool records in the database
         
         Args:
-            pools: List of dictionaries containing yield pool data
-            
-        Returns:
-            Number of records created
-        """
-        created_count = 0
+            pools: List of pool data dictionaries
         
+        Returns:
+            Number of pools created
+        """
+        created_pools = []
         for pool_data in pools:
-            self.create_yield_pool(pool_data)
-            created_count += 1
-            
-        return created_count
+            try:
+                created_pool = self.create_yield_pool(pool_data)
+                created_pools.append(created_pool)
+            except Exception as e:
+                # Log the error for the specific pool but continue processing other pools
+                logging.error(f"Error creating pool: {pool_data}. Error: {str(e)}")
+        
+        self.db.commit()
+        return len(created_pools)
     
     def get_all(self, 
                 chain: Optional[str] = None,
