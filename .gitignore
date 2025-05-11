@@ -187,3 +187,5 @@ sample_*.py
 sample_*/
 
 .pixi/
+
+data/*
