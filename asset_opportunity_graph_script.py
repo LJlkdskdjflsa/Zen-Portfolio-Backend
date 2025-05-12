@@ -13,6 +13,9 @@ from app.infrastructure.database import get_db_context
 from app.tools.get_solana_native_token_yield_options import (
     get_solana_native_token_yield_options,
 )
+from langchain.tools import Tool
+from langchain.agents import AgentType, initialize_agent
+from app.clients.llm_model_client import get_llm_model
 
 
 class AssetTypeEnum(str, enum.Enum):
@@ -84,23 +87,10 @@ class OptimizationResponse(BaseModel):
     recommendations_list: List[OptimizationRecommendation]
 
 
-def get_langchain_model() -> BaseChatModel:
-    model = ChatOpenAI(
-        temperature=0,
-        max_tokens=None,
-        timeout=None,
-        max_retries=2,
-        api_key=settings.OPENAI_API_KEY,
-    )
-    return model
 
 
-tools = [
-    get_solana_native_token_yield_options,
-]
 
-
-def generate_solana_optimization_suggestions(assets: list[dict]):
+def generate_solana_optimization_suggestions(assets: list[dict]) -> OptimizationResponse:
     """
     Generate optimization suggestions for Solana assets using LangChain's tool calling to produce an OptimizationResponse.
 
@@ -111,7 +101,7 @@ def generate_solana_optimization_suggestions(assets: list[dict]):
         OptimizationResponse with recommendations
     """
     # Use LangChain model with structured output for OptimizationResponse
-    model = get_langchain_model()
+    llm = get_llm_model()
     # Prepare the prompt with detailed rules for the LLM
     prompt = f"""
     As a financial advisor specializing in Solana assets, and give me user assets list.
@@ -121,14 +111,14 @@ def generate_solana_optimization_suggestions(assets: list[dict]):
     """
 
     # Generate the optimization response
-    asset_list_dto = model.with_structured_output(AssetList).invoke(input=prompt)
+    asset_list_dto = llm.with_structured_output(AssetList).invoke(input=prompt)
 
     prompt = (
         """
     As a financial advisor specializing in Solana assets, and give me user assets list.
     
     User's assets:"""
-        + json.dumps(assets, indent=2)
+        + json.dumps(asset_list_dto.model_dump(), indent=2)
         + """
     
     # if the amount of SOL is more than 0.5 SOL, suggest staking to the highest APY yield pool
@@ -140,9 +130,35 @@ def generate_solana_optimization_suggestions(assets: list[dict]):
     """
     )
 
-    optimization_response = model.bind_tools(tools).invoke(prompt)
+    tools = [
+        Tool(
+            name="get_solana_native_token_yield_options",
+            func=get_solana_native_token_yield_options,
+            description="""
+        Get yield options for Solana native token (SOL) from the database.
+        Will return yield pools of Solana native token with TVL of 10 million USD or more.
+        """,
+        ),
+    ]
 
-    return asset_list_dto
+    # Create an agent
+    financial_suggestion_string = initialize_agent(
+        tools, llm, agent=AgentType.OPENAI_FUNCTIONS, verbose=True
+    ).run(prompt)
+
+    prompt = """
+    These are the user's assets:
+    """+json.dumps(assets, indent=2)+"""
+    And these are the advice from the previous step:
+    """+financial_suggestion_string+"""
+    please help to suggest some optimization suggestions, within the format of OptimizationResponse.
+    """
+
+    financial_suggestion_dto = llm.with_structured_output(OptimizationResponse).invoke(
+        input=prompt
+    )
+
+    return financial_suggestion_dto
 
 
 def get_optimization_suggestion_from_profile(state):
@@ -172,7 +188,8 @@ if __name__ == "__main__":
     workflow.add_edge("A", END)
 
     app = workflow.compile()
-    result = app.invoke(mock_asset_data)
+    # result = app.invoke(mock_asset_data)
+    result = generate_solana_optimization_suggestions(assets=mock_asset_data)
 
     # Extract the optimization suggestions
     solana_opportunities = result.get("solana_opportunities", {})

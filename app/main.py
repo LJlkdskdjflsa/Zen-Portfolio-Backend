@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.utils.database_util import run_migrations
+from app.routers import optimization
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,6 +39,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(optimization.router)
 
 
 @app.get("/")
