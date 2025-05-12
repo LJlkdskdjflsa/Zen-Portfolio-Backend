@@ -1,4 +1,4 @@
-from typing import TypedDict, List, Dict, Any
+from typing import TypedDict, List, Dict, Any, Literal
 from data.input.mock_asset_data import mock_asset_data
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, Field
@@ -10,7 +10,9 @@ from langchain_openai import ChatOpenAI
 from app.infrastructure.settings import settings
 from langchain_core.language_models.chat_models import BaseChatModel
 from app.infrastructure.database import get_db_context
-from app.repositories.YieldPoolRepository import YieldPoolRepository
+from app.tools.get_solana_native_token_yield_options import (
+    get_solana_native_token_yield_options,
+)
 
 
 class AssetTypeEnum(str, enum.Enum):
@@ -77,10 +79,9 @@ class OptimizationRecommendation(BaseModel):
 class OptimizationResponse(BaseModel):
     """Model for the complete optimization response."""
 
-    walletAddress: str
-    totalValue: float
-    generatedAt: str
-    recommendations: List[OptimizationRecommendation]
+    wallet_score: Literal["A", "B", "C", "D", "F"]
+    wallet_total_suggestion: str
+    recommendations_list: List[OptimizationRecommendation]
 
 
 def get_langchain_model() -> BaseChatModel:
@@ -94,62 +95,24 @@ def get_langchain_model() -> BaseChatModel:
     return model
 
 
-def get_solana_staking_options():
-    """
-    Get all Solana staking options from the database.
-
-    Returns:
-        List of yield pool data for Solana staking options
-    """
-    try:
-        with get_db_context() as db:
-            repo = YieldPoolRepository(db)
-            # Get all yield pools for Solana chain with a minimum APY of 1%
-            solana_pools = repo.get_all(chain="solana", min_apy=1.0)
-
-            # Convert SQLAlchemy objects to dictionaries
-            result = []
-            for pool in solana_pools:
-                pool_dict = {
-                    "chain": pool.chain,
-                    "project": pool.project,
-                    "symbol": pool.symbol,
-                    "tvlUsd": pool.tvlUsd,
-                    "apy": pool.apy,
-                    "apyBase": pool.apyBase,
-                    "apyReward": pool.apyReward,
-                    "stablecoin": pool.stablecoin,
-                    "ilRisk": pool.ilRisk,
-                    "exposure": pool.exposure,
-                    "url": pool.url,
-                }
-                result.append(pool_dict)
-
-            return result
-    except Exception as e:
-        print(f"Error fetching Solana staking options: {str(e)}")
-        return []
+tools = [
+    get_solana_native_token_yield_options,
+]
 
 
 def generate_solana_optimization_suggestions(assets: list[dict]):
     """
-    Generate optimization suggestions for Solana assets.
+    Generate optimization suggestions for Solana assets using LangChain's tool calling to produce an OptimizationResponse.
 
     Args:
         assets: List of user assets
-        wallet_address: User's wallet address
-        total_value: Total value of the portfolio
 
     Returns:
-        Optimization response with recommendations
+        OptimizationResponse with recommendations
     """
-    # Get Solana staking options from the database
-    # solana_staking_options = get_solana_staking_options()
-
-    # Create a model with structured output for optimization recommendations
-    model = get_langchain_model().with_structured_output(AssetList)
-
-    # Prepare the prompt with asset data and staking options
+    # Use LangChain model with structured output for OptimizationResponse
+    model = get_langchain_model()
+    # Prepare the prompt with detailed rules for the LLM
     prompt = f"""
     As a financial advisor specializing in Solana assets, and give me user assets list.
     
@@ -158,9 +121,28 @@ def generate_solana_optimization_suggestions(assets: list[dict]):
     """
 
     # Generate the optimization response
-    optimization_response = model.invoke(input=prompt)
+    asset_list_dto = model.with_structured_output(AssetList).invoke(input=prompt)
 
-    return optimization_response
+    prompt = (
+        """
+    As a financial advisor specializing in Solana assets, and give me user assets list.
+    
+    User's assets:"""
+        + json.dumps(assets, indent=2)
+        + """
+    
+    # if the amount of SOL is more than 0.5 SOL, suggest staking to the highest APY yield pool
+    # if the amount of MEME token is more than 100USD total, tell the user not gambling, make can deposit some to JLP or MSOL these kind of nice assets
+    # if the amount of STABLECOIN is more than 100USD total, suggest staking to the highest APY yield pool
+    # if the amount of YIELD_BEARING_TOKEN is more than 100USD total, suggest staking to the highest APY yield pool
+    # if the amount of LIQUIDITY_STAKING_TOKEN is more than 100USD total, suggest staking to the highest APY yield pool
+    # if the amount of OTHER is more than 100USD total, suggest staking to the highest APY yield pool
+    """
+    )
+
+    optimization_response = model.bind_tools(tools).invoke(prompt)
+
+    return asset_list_dto
 
 
 def get_optimization_suggestion_from_profile(state):
@@ -175,12 +157,11 @@ def get_optimization_suggestion_from_profile(state):
     """
 
     # Generate optimization suggestions for Solana assets
-    optimization_response = generate_solana_optimization_suggestions(
-        assets=state
-    )
+    optimization_response = generate_solana_optimization_suggestions(assets=state)
 
     # Return the updated state with optimization suggestions
-    return optimization_response 
+    return optimization_response
+
 
 if __name__ == "__main__":
     # Build the graph
