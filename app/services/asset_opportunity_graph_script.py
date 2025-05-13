@@ -95,23 +95,43 @@ def generate_solana_optimization_suggestions(
     # Generate the optimization response
     asset_list_dto = llm.with_structured_output(AssetList).invoke(input=get_asset_list_prompt)
 
-    get_optimization_prompt = (
+    # Improved, explicit prompt for the LLM
+    get_optimization_advice_prompt = (
         """
-    As a financial advisor specializing in Solana assets, and give me user assets list.
-    
-    User's assets:"""
+You are a financial advisor specializing in Solana assets. Your job is to analyze the user's asset list and provide optimization suggestions in the format of an OptimizationResponse.
+
+The OptimizationResponse must include:
+- wallet_score: Rate the overall health of the user's portfolio ('A', 'B', 'C', 'D', or 'F').
+- wallet_total_suggestion: A summary of your main advice.
+- recommendations_list: A list of optimization advice. Each item should include:
+    - title, description, action, potentialReturn, riskLevel, implementationDifficulty, timeHorizon.
+- optimization_actions: A list of actions the user can take to improve their yield. Each action must include:
+    - input_mint, output_mint, amount, optimization_action_detail.
+
+Rules for optimization_actions:
+1. If the user holds SOL and the amount is greater than 0.04 SOL:
+    - Suggest staking exactly (user_SOL_amount - 0.04) SOL to the highest APY yield pool.
+    - The amount field must be (user_SOL_amount - 0.04), rounded to 9 decimals.
+    - The optimization_action_detail must match the amount and say:
+      "Stake {amount} SOL to the highest APY yield pool for better returns."
+    - Always leave 0.04 SOL for gas fees.
+2. If the user has 0.04 SOL or less, do not suggest any staking or swapping actions for SOL.
+3. Do not suggest multiple staking actions for SOL; only one solid action is needed.
+4. If there are other tokens with clear yield opportunities, apply similar logic: always leave enough for gas and match the amount and detail fields.
+5. Do not suggest gambling or high-risk actions.
+
+Format your response as valid JSON matching the OptimizationResponse schema.
+
+User's assets:
+"""
         + json.dumps(asset_list_dto.model_dump(), indent=2)
         + """
-    
-    # if the amount of SOL is more than 0.005 SOL, suggest staking to the highest APY yield pool
-    # if the amount of MEME token is more than 100USD total, tell the user not gambling, make can deposit some to JLP or MSOL these kind of nice assets
-    # if the amount of STABLECOIN is more than 100USD total, suggest staking to the highest APY yield pool
-    # if the amount of YIELD_BEARING_TOKEN is more than 100USD total, suggest staking to the highest APY yield pool
-    # if the amount of LIQUIDITY_STAKING_TOKEN is more than 100USD total, suggest staking to the highest APY yield pool
-    # if the amount of OTHER is more than 100USD total, suggest staking to the highest APY yield pool
 
-    
-    """
+Previous advice (if any):
+"""
+        + financial_suggestion_string
+        + """
+"""
     )
 
     tools = [
@@ -128,9 +148,9 @@ def generate_solana_optimization_suggestions(
     # Create an agent
     financial_suggestion_string = initialize_agent(
         tools, llm, agent=AgentType.OPENAI_FUNCTIONS, verbose=True
-    ).run(get_optimization_prompt)
+    ).run(get_optimization_advice_prompt)
 
-    get_optimization_prompt = (
+    get_optimization_advice_prompt = (
         """
     These are the user's assets:
     """
@@ -149,12 +169,14 @@ def generate_solana_optimization_suggestions(
     recommendations_list -> list of optimization advice
     
     optimization_actions -> give the swap action for user to swap some assets to other assets to get more yield (just give solid advice, don't give too many actions. if there are solana native token yield options, suggest to stake some solana native token to the highest APY yield pool)
-    (the amount of optimization_actions should still have some room for gas fee, 0.04 SOL is needed for gas fee)
+    (the amount of optimization_actions should still have some room for gas fee, 0.04 SOL is needed for gas fee), so if the user has less than 0.04 SOL, and didn't have any yield options, don't suggest to swap
+    if the user has less than 0.04 SOL, and have yield options, suggest to stake some solana native token to the highest APY yield pool
+    the amount of optimization_actions is user_amount - 0.04 SOL
     """
     )
 
     financial_suggestion_dto = llm.with_structured_output(OptimizationResponse).invoke(
-        input=get_optimization_prompt
+        input=get_optimization_advice_prompt
     )
 
     return financial_suggestion_dto
