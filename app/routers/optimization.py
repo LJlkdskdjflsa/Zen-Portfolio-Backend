@@ -2,8 +2,8 @@ from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any
 from pydantic import BaseModel
 
-from app.dtos.optimization import OptimizationResponse
-from asset_opportunity_graph_script import generate_solana_optimization_suggestions
+from app.dtos.optimization_dto import OptimizationResponse
+from app.services.asset_opportunity_graph_script import generate_solana_optimization_suggestions
 
 router = APIRouter(
     prefix="/optimization",
