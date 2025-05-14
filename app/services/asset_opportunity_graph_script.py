@@ -1,4 +1,6 @@
 from typing import TypedDict, List, Dict, Any, Literal
+from cachetools import TTLCache, cached
+import hashlib
 from data.input.mock_asset_data import mock_asset_data
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, Field
@@ -70,6 +72,15 @@ class AssetList(BaseModel):
 
 
 
+# Create LRU cache for 10 minutes (600 seconds), maxsize 128 (adjust as needed)
+llm_cache = TTLCache(maxsize=128, ttl=600)
+
+def _assets_hash(assets: list[dict]) -> str:
+    # Create a hash of the assets input for cache key
+    assets_str = json.dumps(assets, sort_keys=True)
+    return hashlib.sha256(assets_str.encode('utf-8')).hexdigest()
+
+@cached(llm_cache, key=lambda assets: _assets_hash(assets))
 def generate_solana_optimization_suggestions(
     assets: list[dict],
 ) -> OptimizationResponse:
