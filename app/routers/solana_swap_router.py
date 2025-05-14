@@ -4,8 +4,8 @@ import httpx
 from app.dtos.optimization_dto import OptimizationAction
 
 router = APIRouter(
-    prefix="/tx-builder",
-    tags=["tx-builder"],
+    prefix="/transactions",
+    tags=["transactions"],
     responses={404: {"description": "Not found"}},
 )
 
@@ -16,11 +16,11 @@ class SolanaQuoteSwapRequest(BaseModel):
 
 
 class SolanaQuoteSwapResponse(BaseModel):
-    quote: dict
-    swap_transaction: dict
+    # quote: dict
+    transaction: str
 
 
-@router.post("", response_model=SolanaQuoteSwapResponse)
+@router.post("/solana", response_model=SolanaQuoteSwapResponse)
 async def get_solana_quote_and_swap(request: SolanaQuoteSwapRequest):
     """
     Given an optimization action and user public key, return the quote and swap transaction data.
@@ -78,4 +78,4 @@ async def get_solana_quote_and_swap(request: SolanaQuoteSwapRequest):
         else:
             swap_tx_json = {"error": "No valid quote for swap"}
 
-    return SolanaQuoteSwapResponse(quote=quote_json, swap_transaction=swap_tx_json)
+    return SolanaQuoteSwapResponse(transaction=swap_tx_json.get("swapTransaction"))
