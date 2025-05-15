@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.utils.database_util import run_migrations
-from app.routers import optimization_router, health_router, solana_swap_router
+from app.routers import optimization_router, health_router, solana_swap_router, wallet_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,6 +44,7 @@ app.add_middleware(
 app.include_router(optimization_router.router)
 app.include_router(health_router.router)
 app.include_router(solana_swap_router.router)
+app.include_router(wallet_router.router)
 
 @app.get("/")
 async def root():
