@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException
 from app.utils.address_util import is_evm_address, is_solana_address
 from fastapi import status
-from app.clients.moralis_client import get_wallet_token_balances_price
+from app.clients.moralis_client import get_wallet_data_by_moralis
 from app.clients.helius_client import get_wallet_data_by_helius
 from app.dtos.wallet_total_asset_response_dto import WalletTotalResponseDTO
+from app.enums.chain_enum import ChainEnum
 
 router = APIRouter(
     prefix="/wallet",
@@ -20,7 +21,7 @@ async def get_wallet_token_balances(wallet_address: str) -> WalletTotalResponseD
     """
     try:
         if is_evm_address(wallet_address):
-            result = get_wallet_token_balances_price(wallet_address=wallet_address, chain="base")
+            result = get_wallet_data_by_moralis(wallet_address=wallet_address, chain=ChainEnum.BASE)
             return result
 
         elif is_solana_address(wallet_address):

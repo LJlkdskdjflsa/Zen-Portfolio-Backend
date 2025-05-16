@@ -1,6 +1,7 @@
 import requests
 from app.infrastructure.settings import settings
 from app.dtos.wallet_total_asset_response_dto import WalletTotalResponseDTO, AssetDTO
+from app.enums.chain_enum import ChainEnum
 
 def get_wallet_data_by_helius(wallet_address: str) -> WalletTotalResponseDTO:
     """
@@ -83,4 +84,5 @@ def get_wallet_data_by_helius(wallet_address: str) -> WalletTotalResponseDTO:
         address=wallet_address,
         assets=assets,
         totalValue=round(total_value, 2),
+        chain=ChainEnum.SOLANA,
     )
