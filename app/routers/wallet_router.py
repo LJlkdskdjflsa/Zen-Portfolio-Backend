@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException
 from app.utils.address_util import is_evm_address, is_solana_address
-from app.clients.solana_tracker_client import get_wallet_data_by_solana_tracker
 from fastapi import status
-from app.dtos.token_balance_response_dto import TokenBalanceResponse
 from app.clients.moralis_client import get_wallet_token_balances_price
+from app.clients.helius_client import get_wallet_data_by_helius
+from app.dtos.wallet_total_asset_response_dto import WalletTotalResponseDTO
 
 router = APIRouter(
     prefix="/wallet",
@@ -12,8 +12,8 @@ router = APIRouter(
 )
 
 
-@router.get("/{wallet_address}/token-balances", response_model=TokenBalanceResponse)
-async def get_wallet_token_balances(wallet_address: str) -> TokenBalanceResponse:
+@router.get("/{wallet_address}/token-balances", response_model=WalletTotalResponseDTO)
+async def get_wallet_token_balances(wallet_address: str) -> WalletTotalResponseDTO:
     """
     Get token balances with prices for a specific wallet address (Base or Solana).
     The address type is auto-detected.
@@ -24,29 +24,9 @@ async def get_wallet_token_balances(wallet_address: str) -> TokenBalanceResponse
             return result
 
         elif is_solana_address(wallet_address):
-            solana_tokens = get_wallet_data_by_solana_tracker(wallet_address)
-            # Normalize to TokenBalanceResponse
-            # block_number, cursor, page, page_size are not meaningful for Solana, set defaults
-            token_list = []
-            for entry in solana_tokens.root:
-                token_list.append(
-                    {
-                        "name": entry.token.name,
-                        "symbol": entry.token.symbol,
-                        "mint": entry.token.mint,
-                        "balance": entry.balance,
-                        "value": entry.value,
-                        "decimals": entry.token.decimals,
-                        "image": entry.token.image,
-                    }
-                )
-            return TokenBalanceResponse(
-                block_number=0,
-                cursor=None,
-                page=1,
-                page_size=len(token_list),
-                result=token_list,
-            )
+            # Use the new Helius-based function and return the new API format directly
+            solana_assets = get_wallet_data_by_helius(wallet_address)
+            return solana_assets
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

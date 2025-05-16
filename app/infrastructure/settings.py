@@ -38,6 +38,9 @@ class Settings(BaseSettings):
 
     # Moralis
     MORALIS_API_KEY: str = get_secret_manager_or_none("moralis_api_key")
+
+    # Helius
+    HELIUS_API_KEY: str = get_secret_manager_or_none("helius_api_key")
     
     model_config = {
         "env_file": ".env" + "." + os.environ.get("ACTIVE_PROFILE", "local"),
